@@ -10,46 +10,178 @@ function assertSudoku(sudoku) {
   }
 }
 
-function createGameState({ sudoku, undoStack = [], redoStack = [] }) {
+function createLinearState(sudoku, undoStack = [], redoStack = []) {
+  assertSudoku(sudoku)
+  return {
+    current: cloneSudoku(sudoku),
+    undo: undoStack.map(cloneSudoku),
+    redo: redoStack.map(cloneSudoku),
+  }
+}
+
+function createGameState({
+  sudoku,
+  undoStack = [],
+  redoStack = [],
+  failedExploreStates = [],
+  explore = null,
+}) {
   assertSudoku(sudoku)
 
-  let current = cloneSudoku(sudoku)
-  let undo = undoStack.map(cloneSudoku)
-  let redo = redoStack.map(cloneSudoku)
+  let main = createLinearState(sudoku, undoStack, redoStack)
+  let failedStates = new Set(Array.isArray(failedExploreStates) ? failedExploreStates : [])
+  let exploreSession = null
+
+  if (explore?.current) {
+    exploreSession = {
+      start: cloneSudoku(explore.start ?? sudoku),
+      branch: createLinearState(explore.current, explore.undoStack ?? [], explore.redoStack ?? []),
+      visited: new Set(Array.isArray(explore.visitedStates) ? explore.visitedStates : []),
+      failed: Boolean(explore.failed),
+    }
+  }
+
+  function activeSession() {
+    return exploreSession ? exploreSession.branch : main
+  }
+
+  function markCurrentExploreStateVisited() {
+    if (!exploreSession) return
+    const signature = exploreSession.branch.current.getSignature()
+    exploreSession.visited.add(signature)
+    if (failedStates.has(signature)) {
+      exploreSession.failed = true
+    }
+  }
+
+  function evaluateExploreFailure() {
+    if (!exploreSession) return false
+    const signature = exploreSession.branch.current.getSignature()
+    if (failedStates.has(signature) || exploreSession.branch.current.isFailedState()) {
+      exploreSession.failed = true
+      failedStates.add(signature)
+      return true
+    }
+    return false
+  }
 
   return {
     getSudoku() {
-      return current
+      return activeSession().current
     },
     guess(move) {
-      undo.push(cloneSudoku(current))
-      current.guess(move)
-      redo = []
+      const target = activeSession()
+      target.undo.push(cloneSudoku(target.current))
+      target.current.guess(move)
+      target.redo = []
+      markCurrentExploreStateVisited()
+      evaluateExploreFailure()
       return this
     },
     undo() {
-      if (!undo.length) return false
-      redo.push(cloneSudoku(current))
-      current = undo.pop()
+      const target = activeSession()
+      if (!target.undo.length) return false
+      target.redo.push(cloneSudoku(target.current))
+      target.current = target.undo.pop()
+      markCurrentExploreStateVisited()
+      evaluateExploreFailure()
       return true
     },
     redo() {
-      if (!redo.length) return false
-      undo.push(cloneSudoku(current))
-      current = redo.pop()
+      const target = activeSession()
+      if (!target.redo.length) return false
+      target.undo.push(cloneSudoku(target.current))
+      target.current = target.redo.pop()
+      markCurrentExploreStateVisited()
+      evaluateExploreFailure()
       return true
     },
     canUndo() {
-      return undo.length > 0
+      return activeSession().undo.length > 0
     },
     canRedo() {
-      return redo.length > 0
+      return activeSession().redo.length > 0
+    },
+    hasConflict() {
+      return this.getSudoku().hasConflict()
+    },
+    enterExplore() {
+      if (exploreSession) return false
+      exploreSession = {
+        start: cloneSudoku(main.current),
+        branch: createLinearState(main.current),
+        visited: new Set([main.current.getSignature()]),
+        failed: false,
+      }
+      evaluateExploreFailure()
+      return true
+    },
+    // Alias kept for compatibility with alternative naming in callers/tests.
+    startExplore() {
+      return this.enterExplore()
+    },
+    inExplore() {
+      return Boolean(exploreSession)
+    },
+    isExploreFailed() {
+      if (!exploreSession) return false
+      evaluateExploreFailure()
+      return exploreSession.failed
+    },
+    rollbackExplore() {
+      if (!exploreSession) return false
+      exploreSession = null
+      return true
+    },
+    // Alias: backtrack means dropping current explore branch to its start.
+    backtrackExplore() {
+      return this.rollbackExplore()
+    },
+    // Alias: abandon explore branch changes.
+    abandonExplore() {
+      return this.rollbackExplore()
+    },
+    // Alias: discard explore branch changes.
+    discardExplore() {
+      return this.rollbackExplore()
+    },
+    commitExplore() {
+      if (!exploreSession) return false
+      evaluateExploreFailure()
+      if (exploreSession.failed) return false
+
+      main.undo.push(cloneSudoku(main.current))
+      main.current = cloneSudoku(exploreSession.branch.current)
+      main.redo = []
+      exploreSession = null
+      return true
+    },
+    hasFailedExploreState() {
+      if (!exploreSession) return false
+      const signature = exploreSession.branch.current.getSignature()
+      return failedStates.has(signature)
+    },
+    getFailedExploreStateCount() {
+      return failedStates.size
     },
     toJSON() {
+      const explore = exploreSession
+        ? {
+            start: exploreSession.start.toJSON(),
+            current: exploreSession.branch.current.toJSON(),
+            undoStack: exploreSession.branch.undo.map((item) => item.toJSON()),
+            redoStack: exploreSession.branch.redo.map((item) => item.toJSON()),
+            visitedStates: Array.from(exploreSession.visited),
+            failed: exploreSession.failed,
+          }
+        : null
+
       return {
-        sudoku: current.toJSON(),
-        undoStack: undo.map((item) => item.toJSON()),
-        redoStack: redo.map((item) => item.toJSON()),
+        sudoku: main.current.toJSON(),
+        undoStack: main.undo.map((item) => item.toJSON()),
+        redoStack: main.redo.map((item) => item.toJSON()),
+        failedExploreStates: Array.from(failedStates),
+        explore,
       }
     },
   }
@@ -67,6 +199,25 @@ export function createGameFromJSON(payload) {
   const redoStack = Array.isArray(payload?.redoStack)
     ? payload.redoStack.map((item) => createSudokuFromJSON(item))
     : []
+  const failedExploreStates = Array.isArray(payload?.failedExploreStates)
+    ? payload.failedExploreStates.slice()
+    : []
+  const explore = payload?.explore
+    ? {
+        start: createSudokuFromJSON(payload.explore.start ?? payload.sudoku ?? payload),
+        current: createSudokuFromJSON(payload.explore.current ?? payload.sudoku ?? payload),
+        undoStack: Array.isArray(payload.explore.undoStack)
+          ? payload.explore.undoStack.map((item) => createSudokuFromJSON(item))
+          : [],
+        redoStack: Array.isArray(payload.explore.redoStack)
+          ? payload.explore.redoStack.map((item) => createSudokuFromJSON(item))
+          : [],
+        visitedStates: Array.isArray(payload.explore.visitedStates)
+          ? payload.explore.visitedStates.slice()
+          : [],
+        failed: Boolean(payload.explore.failed),
+      }
+    : null
 
-  return createGameState({ sudoku, undoStack, redoStack })
+  return createGameState({ sudoku, undoStack, redoStack, failedExploreStates, explore })
 }
