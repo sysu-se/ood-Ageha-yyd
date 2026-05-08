@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadDomainApi, makePuzzle } from './helpers/domain-api.js'
 
-describe('HW2 explore mode behavior', () => {
+describe('HW1 explore mode behavior', () => {
   it('detects conflict and marks current exploration as failed', async () => {
     const { createGame, createSudoku } = await loadDomainApi()
     const game = createGame({ sudoku: createSudoku(makePuzzle()) })

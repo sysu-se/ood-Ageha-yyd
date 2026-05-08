@@ -116,6 +116,7 @@ function createGameState({
       evaluateExploreFailure()
       return true
     },
+    // Alias kept for compatibility with alternative naming in callers/tests.
     startExplore() {
       return this.enterExplore()
     },
@@ -132,12 +133,15 @@ function createGameState({
       exploreSession = null
       return true
     },
+    // Alias: backtrack means dropping current explore branch to its start.
     backtrackExplore() {
       return this.rollbackExplore()
     },
+    // Alias: abandon explore branch changes.
     abandonExplore() {
       return this.rollbackExplore()
     },
+    // Alias: discard explore branch changes.
     discardExplore() {
       return this.rollbackExplore()
     },
