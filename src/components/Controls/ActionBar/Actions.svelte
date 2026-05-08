@@ -1,6 +1,6 @@
 <script>
 	import { candidates } from '@sudoku/stores/candidates';
-	import { userGrid } from '@sudoku/stores/grid';
+	import { exploreState, userGrid } from '@sudoku/stores/grid';
 	import { cursor } from '@sudoku/stores/cursor';
 	import { hints } from '@sudoku/stores/hints';
 	import { notes } from '@sudoku/stores/notes';
@@ -18,6 +18,18 @@
 
 			userGrid.applyHint($cursor);
 		}
+	}
+
+	function handleStartExplore() {
+		userGrid.enterExplore();
+	}
+
+	function handleRollbackExplore() {
+		userGrid.rollbackExplore();
+	}
+
+	function handleCommitExplore() {
+		userGrid.commitExplore();
 	}
 </script>
 
@@ -53,7 +65,27 @@
 		<span class="badge tracking-tighter" class:badge-primary={$notes}>{$notes ? 'ON' : 'OFF'}</span>
 	</button>
 
+	{#if !$exploreState.inExplore}
+		<button class="btn btn-round btn-explore" disabled={$gamePaused} on:click={handleStartExplore} title="Start Explore">
+			试探
+		</button>
+	{:else}
+		<button class="btn btn-round btn-explore-rollback" disabled={$gamePaused} on:click={handleRollbackExplore} title="Rollback Explore">
+			回溯
+		</button>
+		<button class="btn btn-round btn-explore-commit" disabled={$gamePaused || $exploreState.failed} on:click={handleCommitExplore} title="Commit Explore">
+			确认
+		</button>
+	{/if}
+
 </div>
+
+{#if $exploreState.inExplore}
+	<p class="explore-status" class:explore-status-failed={$exploreState.failed}>
+		{$exploreState.failed ? '探索失败，请回溯后尝试其他候选值' : '探索中'}
+		（失败路径记忆数：{$exploreState.failedStateCount}）
+	</p>
+{/if}
 
 
 <style>
@@ -73,5 +105,25 @@
 
 	.badge-primary {
 		@apply bg-primary;
+	}
+
+	.btn-explore {
+		@apply bg-blue-500 text-white;
+	}
+
+	.btn-explore-rollback {
+		@apply bg-yellow-500 text-white;
+	}
+
+	.btn-explore-commit {
+		@apply bg-green-600 text-white;
+	}
+
+	.explore-status {
+		@apply mt-3 text-sm text-gray-700 text-center;
+	}
+
+	.explore-status-failed {
+		@apply text-red-600 font-semibold;
 	}
 </style>
