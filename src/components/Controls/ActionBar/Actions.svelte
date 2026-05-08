@@ -66,14 +66,14 @@
 	</button>
 
 	{#if !$exploreState.inExplore}
-		<button class="btn btn-round btn-explore" disabled={$gamePaused} on:click={handleStartExplore} title="Start Explore" aria-label="Start explore mode">
+		<button class="btn btn-round btn-explore" disabled={$gamePaused} on:click={handleStartExplore} title="开始试探" aria-label="开始试探">
 			试探
 		</button>
 	{:else}
-		<button class="btn btn-round btn-explore-rollback" disabled={$gamePaused} on:click={handleRollbackExplore} title="Rollback Explore" aria-label="Rollback explore branch">
+		<button class="btn btn-round btn-explore-rollback" disabled={$gamePaused} on:click={handleRollbackExplore} title="回溯试探分支" aria-label="回溯试探分支">
 			回溯
 		</button>
-		<button class="btn btn-round btn-explore-commit" disabled={$gamePaused || $exploreState.failed} on:click={handleCommitExplore} title="Commit Explore" aria-label="Commit explore branch">
+		<button class="btn btn-round btn-explore-commit" disabled={$gamePaused || $exploreState.failed} on:click={handleCommitExplore} title="确认试探分支" aria-label="确认试探分支">
 			确认
 		</button>
 	{/if}
